@@ -526,11 +526,9 @@ header.hero::after{
   <div class="toolbar-row">
     <div class="type-chips" id="typeChips"></div>
   </div>
-  <div class="toolbar-row" id="personPlaceRow">
-    <div class="range-inputs">
-      <input type="text" id="filterPersonInput" placeholder="👤 Persona..." style="flex:1;">
-      <input type="text" id="filterPlaceInput" placeholder="📍 Lugar..." style="flex:1;">
-    </div>
+  <div class="toolbar-row" id="personPlaceRow" style="flex-direction:column; gap:6px;">
+    <input type="text" id="filterPersonInput" placeholder="👤 Persona..." style="width:100%; border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; font-size:13px; font-family:inherit; background:#fff; color:var(--ink); box-sizing:border-box;">
+    <input type="text" id="filterPlaceInput" placeholder="📍 Lugar..." style="width:100%; border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; font-size:13px; font-family:inherit; background:#fff; color:var(--ink); box-sizing:border-box;">
   </div>
   <div class="toolbar-actions">
     <button class="link-btn" onclick="openTypesModal()">⚙️ Gestionar tipos</button>
@@ -618,7 +616,12 @@ header.hero::after{
 <!-- SYNC MODAL -->
 <div class="overlay" id="syncOverlay">
   <div class="modal">
-    <h2>Sincronización con GitHub Gist</h2>
+    <h2>Configuración</h2>
+    <div class="field">
+      <label>Tu año de nacimiento</label>
+      <input type="number" id="birthYearInput" placeholder="1983" min="1900" max="2099" style="width:100%;">
+    </div>
+    <div style="height:1px; background:var(--line); margin:4px 0 14px;"></div>
     <div class="field">
       <label>Token de GitHub (con permiso "gist")</label>
       <input type="password" id="ghToken" placeholder="ghp_...">
@@ -661,6 +664,7 @@ const LS_KEY_EVENTS = 'olways_events';
 const LS_KEY_TYPES = 'olways_types';
 const LS_KEY_GH_TOKEN = 'olways_gh_token';
 const LS_KEY_GH_GIST = 'olways_gh_gist';
+const LS_KEY_BIRTH_YEAR = 'olways_birth_year';
 
 function loadState(){
   const e = localStorage.getItem(LS_KEY_EVENTS);
@@ -807,9 +811,9 @@ function renderTimeline(){
   });
   const years = Object.keys(groups).sort((a,b)=>b-a);
 
-  // Año de nacimiento: evento tipo 'nacimiento' más antiguo
-  const birthEvent = EVENTS.filter(e=>e.tipo==='nacimiento').sort((a,b)=>a.anio-b.anio)[0];
-  const birthYear = birthEvent ? birthEvent.anio : null;
+  // Año de nacimiento: primero del ajuste manual, si no intenta el nacimiento más reciente que tenga sentido
+  const storedBirth = localStorage.getItem(LS_KEY_BIRTH_YEAR);
+  const birthYear = storedBirth ? parseInt(storedBirth) : null;
   const currentYear = new Date().getFullYear();
 
   wrap.innerHTML = years.map(y=>{
@@ -1086,11 +1090,17 @@ function openSyncModal(){
   const { token, gistId } = getGhCreds();
   document.getElementById('ghToken').value = token || '';
   document.getElementById('ghGistId').value = gistId || '';
+  document.getElementById('birthYearInput').value = localStorage.getItem(LS_KEY_BIRTH_YEAR) || '';
   document.getElementById('syncedActions').style.display = (token && gistId) ? 'flex':'none';
   document.getElementById('disconnectRow').style.display = (token && gistId) ? 'flex':'none';
   document.getElementById('syncOverlay').classList.add('show');
 }
 function closeSyncModal(){
+  const by = document.getElementById('birthYearInput').value.trim();
+  if(by && /^\d{4}$/.test(by)){
+    localStorage.setItem(LS_KEY_BIRTH_YEAR, by);
+    renderTimeline(); // recalcula edades
+  }
   document.getElementById('syncOverlay').classList.remove('show');
 }
 function disconnectSync(){
