@@ -1,4 +1,4 @@
-const CACHE_NAME = 'olways-v1';
+const CACHE_NAME = 'olways-v2';
 const ASSETS = [
   './',
   './index.html',
