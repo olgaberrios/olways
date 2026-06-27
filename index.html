@@ -660,9 +660,48 @@ function loadState(){
   EVENTS = e ? JSON.parse(e) : JSON.parse(JSON.stringify(DEFAULT_EVENTS));
   TYPES = t ? JSON.parse(t) : JSON.parse(JSON.stringify(DEFAULT_TYPES));
 }
+
+async function autoSyncOnLoad(){
+  const { token, gistId } = getGhCreds();
+  if(!token || !gistId) return;
+  try{
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers:{ 'Authorization':`token ${token}` }
+    });
+    if(!res.ok) return;
+    const data = await res.json();
+    const eventsContent = data.files['olways-events.json']?.content;
+    const typesContent  = data.files['olways-types.json']?.content;
+    if(eventsContent) EVENTS = JSON.parse(eventsContent);
+    if(typesContent)  TYPES  = JSON.parse(typesContent);
+    localStorage.setItem(LS_KEY_EVENTS, JSON.stringify(EVENTS));
+    localStorage.setItem(LS_KEY_TYPES,  JSON.stringify(TYPES));
+    renderYearSelect();
+    renderTypeChips();
+    renderHeroStats();
+    renderTimeline();
+    updateSyncBanner();
+    setSyncBannerOk();
+    // Sin conexión: usamos los datos locales
+  }
+}
 function saveState(){
   localStorage.setItem(LS_KEY_EVENTS, JSON.stringify(EVENTS));
   localStorage.setItem(LS_KEY_TYPES, JSON.stringify(TYPES));
+  // Auto-push al Gist si está configurado (sin bloquear la UI)
+  const { token, gistId } = getGhCreds();
+  if(token && gistId){
+    fetch(`https://api.github.com/gists/${gistId}`, {
+      method:'PATCH',
+      headers:{ 'Authorization':`token ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        files: {
+          'olways-events.json': { content: JSON.stringify(EVENTS, null, 2) },
+          'olways-types.json': { content: JSON.stringify(TYPES, null, 2) }
+        }
+      })
+    }).catch(()=>{}); // silencioso — no interrumpe si falla
+  }
 }
 
 function typeById(id){ return TYPES.find(t=>t.id===id) || {emoji:'❔', nombre:id, color:'#999'}; }
@@ -1004,11 +1043,18 @@ function updateSyncBanner(){
   const text = document.getElementById('syncText');
   if(token && gistId){
     banner.style.display = 'flex';
-    text.textContent = '✅ Sincronizado con Gist';
+    text.textContent = '☁️ Sincronizando...';
+    // Se actualizará a ✅ cuando autoSyncOnLoad termine (o queda en ☁️ si no hay red)
   } else {
     banner.style.display = 'flex';
     text.textContent = 'Conecta un Gist para sincronizar entre dispositivos.';
   }
+}
+
+function setSyncBannerOk(){
+  const { token, gistId } = getGhCreds();
+  if(!token || !gistId) return;
+  document.getElementById('syncText').textContent = '✅ Sincronizado con Gist';
 }
 function openSyncModal(){
   const { token, gistId } = getGhCreds();
@@ -1126,6 +1172,7 @@ renderTypeChips();
 renderHeroStats();
 renderTimeline();
 updateSyncBanner();
+autoSyncOnLoad();
 </script>
 </body>
 </html>
