@@ -634,10 +634,6 @@ header.hero::after{
       <button class="btn btn-secondary" onclick="closeSyncModal()">Cerrar</button>
       <button class="btn btn-primary" onclick="connectSync()">Conectar</button>
     </div>
-    <div class="modal-actions" id="syncedActions" style="display:none;">
-      <button class="btn btn-secondary" onclick="pullFromGist()">⬇️ Traer de Gist</button>
-      <button class="btn btn-primary" onclick="pushToGist()">⬆️ Subir a Gist</button>
-    </div>
     <div class="modal-actions" id="disconnectRow" style="display:none;">
       <button class="btn btn-danger" onclick="disconnectSync()">Desconectar</button>
     </div>
@@ -1091,7 +1087,6 @@ function openSyncModal(){
   document.getElementById('ghToken').value = token || '';
   document.getElementById('ghGistId').value = gistId || '';
   document.getElementById('birthYearInput').value = localStorage.getItem(LS_KEY_BIRTH_YEAR) || '';
-  document.getElementById('syncedActions').style.display = (token && gistId) ? 'flex':'none';
   document.getElementById('disconnectRow').style.display = (token && gistId) ? 'flex':'none';
   document.getElementById('syncOverlay').classList.add('show');
 }
@@ -1138,11 +1133,10 @@ async function connectSync(){
     }
     localStorage.setItem(LS_KEY_GH_TOKEN, token);
     localStorage.setItem(LS_KEY_GH_GIST, gistId);
-    document.getElementById('syncedActions').style.display = 'flex';
     document.getElementById('disconnectRow').style.display = 'flex';
     closeSyncModal();
     showToast('Conectado a Gist');
-    autoSyncOnLoad(); // pull inmediato al conectar
+    autoSyncOnLoad();
   } catch(err){
     showToast('Error: ' + err.message);
   }
