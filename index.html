@@ -526,6 +526,12 @@ header.hero::after{
   <div class="toolbar-row">
     <div class="type-chips" id="typeChips"></div>
   </div>
+  <div class="toolbar-row" id="personPlaceRow">
+    <div class="range-inputs">
+      <input type="text" id="filterPersonInput" placeholder="👤 Persona..." style="flex:1;">
+      <input type="text" id="filterPlaceInput" placeholder="📍 Lugar..." style="flex:1;">
+    </div>
+  </div>
   <div class="toolbar-actions">
     <button class="link-btn" onclick="openTypesModal()">⚙️ Gestionar tipos</button>
     <span class="count-pill" id="countPill"></span>
@@ -647,6 +653,8 @@ let filterYear = null;
 let filterRangeFrom = null;
 let filterRangeTo = null;
 let activeTypeFilters = new Set();
+let filterPerson = '';
+let filterPlace = '';
 let editingTypeForEvent = null;
 
 const LS_KEY_EVENTS = 'olways_events';
@@ -664,11 +672,12 @@ function loadState(){
 async function autoSyncOnLoad(){
   const { token, gistId } = getGhCreds();
   if(!token || !gistId) return;
+  updateSyncBanner('syncing');
   try{
     const res = await fetch(`https://api.github.com/gists/${gistId}`, {
       headers:{ 'Authorization':`token ${token}` }
     });
-    if(!res.ok) return;
+    if(!res.ok){ updateSyncBanner('error'); return; }
     const data = await res.json();
     const eventsContent = data.files['olways-events.json']?.content;
     const typesContent  = data.files['olways-types.json']?.content;
@@ -680,9 +689,9 @@ async function autoSyncOnLoad(){
     renderTypeChips();
     renderHeroStats();
     renderTimeline();
-    updateSyncBanner();
-    setSyncBannerOk();
-    // Sin conexión: usamos los datos locales
+    updateSyncBanner('ok');
+  } catch(e){
+    updateSyncBanner('error');
   }
 }
 function saveState(){
@@ -750,6 +759,8 @@ document.getElementById('yearSelect').addEventListener('change', (e)=>{
 });
 document.getElementById('rangeFrom').addEventListener('input', (e)=>{ filterRangeFrom = e.target.value; renderTimeline(); });
 document.getElementById('rangeTo').addEventListener('input', (e)=>{ filterRangeTo = e.target.value; renderTimeline(); });
+document.getElementById('filterPersonInput').addEventListener('input', (e)=>{ filterPerson = e.target.value.trim().toLowerCase(); renderTimeline(); });
+document.getElementById('filterPlaceInput').addEventListener('input', (e)=>{ filterPlace = e.target.value.trim().toLowerCase(); renderTimeline(); });
 
 /* ============ TIMELINE ============ */
 function getFilteredEvents(){
@@ -763,6 +774,12 @@ function getFilteredEvents(){
   }
   if(activeTypeFilters.size>0){
     list = list.filter(e=> activeTypeFilters.has(e.tipo));
+  }
+  if(filterPerson){
+    list = list.filter(e=> (e.protas||'').toLowerCase().includes(filterPerson));
+  }
+  if(filterPlace){
+    list = list.filter(e=> (e.lugar||'').toLowerCase().includes(filterPlace));
   }
   // orden: más nuevo primero
   list.sort((a,b)=>{
@@ -790,9 +807,17 @@ function renderTimeline(){
   });
   const years = Object.keys(groups).sort((a,b)=>b-a);
 
+  // Año de nacimiento: evento tipo 'nacimiento' más antiguo
+  const birthEvent = EVENTS.filter(e=>e.tipo==='nacimiento').sort((a,b)=>a.anio-b.anio)[0];
+  const birthYear = birthEvent ? birthEvent.anio : null;
+  const currentYear = new Date().getFullYear();
+
   wrap.innerHTML = years.map(y=>{
-    const sample = groups[y][0];
-    const edadTxt = (sample.edad!==null && sample.edad!==undefined) ? `${sample.edad} años` : '';
+    const yInt = parseInt(y);
+    const edadBase = birthYear ? (yInt - birthYear) : null;
+    const edad = (edadBase !== null && edadBase >= 0) ? edadBase : null;
+    const esAhora = yInt === currentYear;
+    const edadTxt = edad !== null ? `${edad} años${esAhora ? ' 🎂' : ''}` : '';
     const cards = groups[y].map(e=>{
       const t = typeById(e.tipo);
       const metaParts = [];
@@ -1037,24 +1062,25 @@ function getGhCreds(){
     gistId: localStorage.getItem(LS_KEY_GH_GIST)
   };
 }
-function updateSyncBanner(){
+function updateSyncBanner(estado){
+  // estado: 'noconfig' | 'syncing' | 'ok' | 'error'
   const { token, gistId } = getGhCreds();
   const banner = document.getElementById('syncBanner');
   const text = document.getElementById('syncText');
-  if(token && gistId){
-    banner.style.display = 'flex';
-    text.textContent = '☁️ Sincronizando...';
-    // Se actualizará a ✅ cuando autoSyncOnLoad termine (o queda en ☁️ si no hay red)
-  } else {
-    banner.style.display = 'flex';
+  banner.style.display = 'flex';
+  if(!token || !gistId){
     text.textContent = 'Conecta un Gist para sincronizar entre dispositivos.';
+  } else if(estado === 'ok'){
+    text.textContent = '✅ Sincronizado';
+  } else if(estado === 'error'){
+    text.textContent = '⚠️ Sin conexión – datos locales';
+  } else {
+    text.textContent = '☁️ Sincronizando...';
   }
 }
 
 function setSyncBannerOk(){
-  const { token, gistId } = getGhCreds();
-  if(!token || !gistId) return;
-  document.getElementById('syncText').textContent = '✅ Sincronizado con Gist';
+  updateSyncBanner('ok');
 }
 function openSyncModal(){
   const { token, gistId } = getGhCreds();
@@ -1070,7 +1096,7 @@ function closeSyncModal(){
 function disconnectSync(){
   localStorage.removeItem(LS_KEY_GH_TOKEN);
   localStorage.removeItem(LS_KEY_GH_GIST);
-  updateSyncBanner();
+  updateSyncBanner('noconfig');
   closeSyncModal();
   showToast('Desconectado de Gist');
 }
@@ -1102,10 +1128,11 @@ async function connectSync(){
     }
     localStorage.setItem(LS_KEY_GH_TOKEN, token);
     localStorage.setItem(LS_KEY_GH_GIST, gistId);
-    updateSyncBanner();
     document.getElementById('syncedActions').style.display = 'flex';
     document.getElementById('disconnectRow').style.display = 'flex';
+    closeSyncModal();
     showToast('Conectado a Gist');
+    autoSyncOnLoad(); // pull inmediato al conectar
   } catch(err){
     showToast('Error: ' + err.message);
   }
@@ -1171,7 +1198,7 @@ renderYearSelect();
 renderTypeChips();
 renderHeroStats();
 renderTimeline();
-updateSyncBanner();
+updateSyncBanner('noconfig');
 autoSyncOnLoad();
 </script>
 </body>
